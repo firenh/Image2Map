@@ -27,6 +27,7 @@ import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.LiteralText;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
@@ -45,7 +46,12 @@ public class Image2Map implements ModInitializer {
                     .requires(source -> source.hasPermissionLevel(CONFIG.minPermLevel))
                     .then(CommandManager.argument("mode", StringArgumentType.word()).suggests(new DitherModeSuggestionProvider())
                             .then(CommandManager.argument("path", StringArgumentType.greedyString())
-                                    .executes(this::createMap))));
+                                    .executes(context -> createMap(context, false)))));
+
+            dispatcher.register(CommandManager.literal("mapdraw")
+                    .then(CommandManager.argument("mode", StringArgumentType.word()).suggests(new DitherModeSuggestionProvider())
+                            .then(CommandManager.argument("path", StringArgumentType.greedyString())
+                                    .executes(context -> createMap(context, true)))));
         });
     }
 
@@ -74,7 +80,7 @@ public class Image2Map implements ModInitializer {
         }
     }
 
-    private int createMap(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
+    private int createMap(CommandContext<ServerCommandSource> context, boolean requiresMap) throws CommandSyntaxException {
         ServerCommandSource source = context.getSource();
         Vec3d pos = source.getPosition();
         PlayerEntity player = source.getPlayer();
@@ -89,6 +95,7 @@ public class Image2Map implements ModInitializer {
 
         source.sendFeedback(new LiteralText("Generating image map..."), false);
         BufferedImage image;
+
         try {
             if (isValid(input)) {
                 URL url = new URL(input);
@@ -111,8 +118,15 @@ public class Image2Map implements ModInitializer {
             source.sendFeedback(new LiteralText("That doesn't seem to be a valid image."), false);
             return 0;
         }
+        
+        if (requiresMap && !player.getInventory().contains(new ItemStack(Items.MAP))) {
+            source.sendError(new LiteralText("You don't have a map in your inventory!"));
+            return 0;
+        }
 
         ItemStack stack = MapRenderer.render(image, mode, source.getWorld(), pos.x, pos.z, player);
+        player.currentScreenHandler.sendContentUpdates();
+        player.playerScreenHandler.onContentChanged(player.getInventory());
 
         source.sendFeedback(new LiteralText("Done!"), false);
         if (!player.getInventory().insertStack(stack)) {
@@ -120,6 +134,8 @@ public class Image2Map implements ModInitializer {
                     player.getPos().z, stack);
             player.world.spawnEntity(itemEntity);
         }
+
+        if (requiresMap) player.getInventory().remove(itemStack -> itemStack.isOf(Items.MAP), 1, player.playerScreenHandler.getCraftingInput());
 
         return 1;
     }
