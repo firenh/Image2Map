@@ -120,7 +120,7 @@ public class Image2Map implements ModInitializer {
         }
         
         if (requiresMap && !player.getInventory().contains(new ItemStack(Items.MAP))) {
-            source.sendError(new LiteralText("You don't have a map in your inventory!"));
+            source.sendError(Text.of("You don't have a map in your inventory!"));
             return 0;
         }
 
